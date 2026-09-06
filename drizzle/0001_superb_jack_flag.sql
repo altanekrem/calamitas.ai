@@ -1,0 +1,1 @@
+ALTER TABLE `contact_messages` ADD `delete_token_hash` text NOT NULL;

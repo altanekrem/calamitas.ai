@@ -28,3 +28,37 @@ pnpm run dev
 ```bash
 pnpm run build
 ```
+
+## Yapılandırma
+
+`.env.example` dosyasını temel alın:
+
+- `SPONSOR_RECIPIENT_EMAIL`: form bildiriminin hedef alıcısı
+- `RESEND_API_KEY`: Resend API anahtarı
+- `CONTACT_FROM_EMAIL`: Resend üzerinde doğrulanmış gönderici adresi
+
+`RESEND_API_KEY` ve `CONTACT_FROM_EMAIL` yoksa form D1 veritabanına kaydolur ancak otomatik e-posta göndermez. Form yanıtı bu durumu kullanıcıya açıkça bildirir.
+
+İletişim kayıtlarının şeması `db/schema.ts`, SQL geçişleri `drizzle/` altındadır. Barındırma projesi `.openai/hosting.json` içinde `DB` adlı D1 bağlantısını kullanır.
+
+## Varlıklar ve veri kaynakları
+
+- Marka, ekip ve Bilgi Merkezi dosyaları `public/` altındadır.
+- Takım tanıtım dosyası `public/documents/calamitas-ai-tanitim-dosyasi.pdf` yolundadır.
+- Dikey tanıtım videosu tekrar üretilebilir:
+
+```bash
+node scripts/generate-project-video.mjs
+```
+
+- Güncel deprem verisi USGS Earthquake Hazards Program GeoJSON akışından sunucu tarafında alınır. Kaynak bağlantısı harita sayfasında gösterilir.
+
+## Doğrulama
+
+Yayın öncesinde en az şu kontroller yapılmalıdır:
+
+1. `pnpm run build`
+2. `node scripts/verify-operation-routes.mjs`
+3. Tüm sekiz sayfa ile PDF/video varlıklarında HTTP 200 kontrolü
+4. Sponsor formunda oluşturma ve verilen silme anahtarıyla silme
+5. Operasyon simülasyonunda yol kapanınca rota çizgisi, personel hareketi, plan sürümü ve güncellenen rota sayısının birlikte değişmesi
