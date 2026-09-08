@@ -1,39 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import ts from 'typescript';
 
-const componentPath = path.resolve(process.cwd(), 'components', 'system-dashboard.tsx');
-const source = await readFile(componentPath, 'utf8');
-const start = source.indexOf('const GRID_X');
-const end = source.indexOf('export function SystemDashboard');
-if (start < 0 || end < 0 || end <= start) throw new Error('Operation simulation source section could not be found.');
+const root = process.cwd();
+const component = await readFile(path.join(root, 'components', 'system-dashboard.tsx'), 'utf8');
+const contract = await readFile(path.join(root, 'lib', 'jury-simulation.ts'), 'utf8');
+const api = await readFile(path.join(root, 'app', 'api', 'analyze', 'route.ts'), 'utf8');
 
-const diagnostics = `
-const base = buildRoutePlans(8, 1, []);
-const closure2 = buildRoutePlans(8, 2, []);
-const closure3 = buildRoutePlans(8, 3, []);
-const critical9 = buildRoutePlans(9, 1, []);
-const help = buildRoutePlans(8, 1, [{ requesterId: 17, targetId: base.find(plan => plan.person.id === 17).target.id }]);
-const blocked3 = new Set(CLOSURES.slice(0, 3).map(keyOf));
-const crossesClosedNode = closure3.some(plan => plan.path.slice(1, -1).some(point => blocked3.has(keyOf(point))));
-const coveredTargets = new Set(critical9.map(plan => plan.target.id)).size;
-const result = {
-  secondClosureChanges: countPlanChanges(base, closure2),
-  thirdClosureChanges: countPlanChanges(closure2, closure3),
-  newCriticalTargetChanges: countPlanChanges(base, critical9),
-  helpRequestChanges: countPlanChanges(base, help),
-  coveredTargets,
-  crossesClosedNode,
-};
-if (result.secondClosureChanges < 1 || result.thirdClosureChanges < 1) throw new Error('A closure did not alter any calculated route.');
-if (result.newCriticalTargetChanges < 1 || result.coveredTargets !== 9) throw new Error('New critical target was not covered by a real assignment.');
-if (result.helpRequestChanges < 1) throw new Error('Help request did not change a support assignment or route.');
-if (result.crossesClosedNode) throw new Error('A calculated path crosses a closed node.');
-console.log(JSON.stringify(result));
-`;
-
-const transpiled = ts.transpileModule(`${source.slice(start, end)}\n${diagnostics}`, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-
-await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`);
+for (const token of ['buildRoutePlans', 'findPath', 'assignmentScore', 'Math.random', 'checksum', '92.4']) {
+  if (component.includes(token)) throw new Error(`Frontend contains forbidden synthetic logic: ${token}`);
+}
+for (const token of ['analysis', 'step2', 'step7', 'rerouted_teams', 'unreachable', 'plan_hash', 'signature']) {
+  if (!contract.includes(token)) throw new Error(`Contract is missing required field: ${token}`);
+}
+if (!api.includes('BACKEND_ANALYZE_URL') || !api.includes('isJurySimulationResult')) throw new Error('Analyze route is not connected to the validated backend contract.');
+if (!component.includes("fetch('/api/analyze'")) throw new Error('Frontend does not call the analyze endpoint.');
+console.log(JSON.stringify({ status: 'ok', checked: ['no synthetic route logic', 'JurySimulationResult fields', 'backend proxy', 'frontend API call'] }));
