@@ -1,0 +1,56 @@
+{
+  "simulation_schema_version": "1.0.0",
+  "incident_id": "inc_a80b019a44e6",
+  "region_id": "Kahramanmaras-turkey-earthquake-23",
+  "step_2": {
+    "before_image_source": "synthetic",
+    "osm_source": "region",
+    "solution_time_ms": 187.27,
+    "post_image_source": "Dosya bulunamadı",
+    "matched_by": "Sentetik Senaryo",
+    "offline_ready": true,
+    "summary": "Afet Sonrası (Post) Görüntü: Görüntü dosyası bulunamadı\nOtomatik Eşleşen Afet Öncesi (Pre): Görüntü dosyası bulunamadı\nPre Kaynağı: synthetic\nModel koşmayacak, simülasyon sentetik koordinatlarla yürütülecek."
+  },
+  "step_7": {
+    "replan_summary": "Yol Kapanma Bildirimi: (37.5763 N, 36.9272 E, Yarıçap: 250 m)\nEngeli aşan ekipler tespit ediliyor ve rotalar güncelleniyor...\n- Ekip GNL-01: Rota güncellendi (Yeni sıra: 13 bina, Erişilemeyen: 0 bina)\n- Ekip IPK-03: Rota güncellendi (Yeni sıra: 24 bina, Erişilemeyen: 0 bina)",
+    "rerouted_teams": [
+      {
+        "team_name": "GNL-01",
+        "old_order": [10, 8, 25, 48, 91, 1, 9, 52, 54, 67, 81, 92, 112],
+        "new_order": [10, 8, 25, 91, 48, 1, 9, 52, 54, 67, 81, 92, 112],
+        "unreachable_buildings": [],
+        "old_expected_savable": 2.24,
+        "new_expected_savable": 2.24
+      },
+      {
+        "team_name": "IPK-03",
+        "old_order": [69, 96, 39, 19, 64, 68, 20, 24, 27, 32, 40, 44, 55, 57, 58, 59, 75, 85, 88, 93, 104, 109, 115, 119],
+        "new_order": [69, 96, 39, 19, 68, 64, 20, 24, 27, 32, 40, 44, 55, 57, 58, 59, 75, 85, 88, 93, 104, 109, 115, 119],
+        "unreachable_buildings": [],
+        "old_expected_savable": 29.37,
+        "new_expected_savable": 29.37
+      }
+    ],
+    "unreachable_buildings": [],
+    "plan_id": "pv_942dfd7d5d78",
+    "plan_hash": "d647aa138f4f8a73",
+    "signature": "v1:c9b50c207d52eb81c3be14494ece8c65a048120abaa0ce738cb235ae14e37767",
+    "replan_plan_id": "pv_2fc7a35edf37",
+    "replan_plan_hash": "9d179fd75c6873c5",
+    "replan_signature": "v1:9aa86fbd8f64a3bef863cee5aad814f9a6ec63a3ded40ece07b590ca3f3c679e",
+    "old_plan": {
+      "plan_id": "pv_942dfd7d5d78",
+      "plan_hash": "d647aa138f4f8a73",
+      "signature": "v1:c9b50c207d52eb81c3be14494ece8c65a048120abaa0ce738cb235ae14e37767",
+      "version": "1.0"
+    },
+    "new_plan": {
+      "plan_id": "pv_2fc7a35edf37",
+      "plan_hash": "9d179fd75c6873c5",
+      "signature": "v1:9aa86fbd8f64a3bef863cee5aad814f9a6ec63a3ded40ece07b590ca3f3c679e",
+      "version": "1.1"
+    },
+    "replan_version": "1.1",
+    "roadblock_coords": [37.57631, 36.92716, 250.0]
+  }
+}

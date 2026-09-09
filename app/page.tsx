@@ -39,7 +39,7 @@ export default function Home() {
               <Image src="/media/afet-sonrasi-analiz.webp" alt="Örnek yapay zekâ hasar analizi" fill sizes="(max-width: 900px) 92vw, 42vw" priority />
               <span className="scan" aria-hidden="true" /><span className="map-label critical">Kritik bölge</span><span className="map-label route">Rota açık</span>
             </div>
-            <div className="ops-metrics"><span><small>Örnek tespit</small><strong>78</strong><em>yapı</em></span><span><small>Kritik küme</small><strong>03</strong><em>bölge</em></span><span><small>Senaryo skoru</small><strong>%92,4</strong><em>demo verisi</em></span></div>
+            <div className="ops-metrics"><span><small>Veri durumu</small><strong>Fixture</strong><em>resmi sözleşme</em></span><span><small>Çalışma modu</small><strong>Offline</strong><em>hazır</em></span><span><small>Jüri adımları</small><strong>02 / 07</strong><em>bağlı</em></span></div>
           </div>
         </div>
       </section>

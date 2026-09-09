@@ -21,12 +21,16 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import type { JurySimulationResult } from '@/types/jury';
 
 type Preview = { url: string; name: string; objectUrl: boolean };
 type Phase = 'idle' | 'analyzing' | 'planning' | 'live';
 type MissionStatus = 'Müsait' | 'Görev Atandı' | 'Görevi Kabul Etti' | 'Yola Çıktı' | 'Bölgeye Ulaştı' | 'Görevde' | 'Görev Tamamlandı' | 'Yardım Gerekiyor';
 type GridPoint = { col: number; row: number; x: number; y: number };
 type HelpRequest = { requesterId: number; targetId: string };
+type JuryStep = 'step_2' | 'step_7';
+
+const JURY_FIXTURE_URL = '/fixtures/jury_simulation_step2_step7.json';
 
 const GRID_X = [5, 18, 31, 44, 57, 70, 83, 96];
 const GRID_Y = [6, 20, 34, 48, 62, 76, 91];
@@ -203,6 +207,10 @@ export function SystemDashboard() {
   const [fileMessage, setFileMessage] = useState('');
   const [activity, setActivity] = useState(['Operasyon senaryosu analize hazır.']);
   const [planChange, setPlanChange] = useState('v1 · Başlangıç planı hazırlanmayı bekliyor.');
+  const [juryResult, setJuryResult] = useState<JurySimulationResult | null>(null);
+  const [juryStep, setJuryStep] = useState<JuryStep>('step_2');
+  const [juryLoading, setJuryLoading] = useState(false);
+  const [juryError, setJuryError] = useState('');
 
   useEffect(() => () => {
     if (after?.objectUrl) URL.revokeObjectURL(after.url);
@@ -278,6 +286,23 @@ export function SystemDashboard() {
     resetScenario(false);
   }
 
+  async function loadJurySimulation() {
+    setJuryLoading(true);
+    setJuryError('');
+    const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
+    const endpoint = apiBase ? `${apiBase}/jury/simulation` : JURY_FIXTURE_URL;
+    try {
+      const response = await fetch(endpoint, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Jüri simülasyonu alınamadı (${response.status}).`);
+      setJuryResult(await response.json() as JurySimulationResult);
+    } catch (error) {
+      setJuryResult(null);
+      setJuryError(error instanceof Error ? error.message : 'Jüri simülasyonu alınamadı.');
+    } finally {
+      setJuryLoading(false);
+    }
+  }
+
   function startAnalysis() {
     if (!after) loadExample();
     setPhase('analyzing');
@@ -291,6 +316,7 @@ export function SystemDashboard() {
     setHelpRequests([]);
     setPlanChange('v1 · Görüntü analizi ve ilk atamalar hazırlanıyor.');
     setActivity(['Afet sonrası görüntü alındı; analiz başlatıldı.']);
+    void loadJurySimulation();
   }
 
   function addClosure() {
@@ -394,14 +420,28 @@ export function SystemDashboard() {
           </header>
           <p className="plan-change-note"><RefreshCw aria-hidden="true" /> {planChange}</p>
 
-          <div className="operation-metrics">
-            <article><strong>{BUILDINGS.length}</strong><span>analiz edilen yapı</span></article>
-            <article><strong>{criticalCount}</strong><span>kritik hedef</span></article>
-            <article><strong>{PEOPLE.length}</strong><span>aktif personel</span></article>
-            <article><strong>{taskCount}</strong><span>oluşturulan görev</span></article>
-            <article><strong>{acceptedTasks}</strong><span>kabul edilen görev</span></article>
-            <article><strong>{averageEta} dk</strong><span>ortalama tahmini intikal</span></article>
-          </div>
+          <section className="jury-panel" aria-label="Jüri simülasyonu sonucu">
+            <div className="jury-panel-head">
+              <div><span className="mission-kicker"><Satellite aria-hidden="true" /> Jüri simülasyonu</span><small>{juryResult ? `Şema ${juryResult.simulation_schema_version} · ${juryResult.incident_id}` : 'Backend sözleşmesi bekleniyor'}</small></div>
+              {juryResult && <div className="jury-tabs" role="tablist" aria-label="Jüri simülasyonu adımları">
+                <button type="button" className={juryStep === 'step_2' ? 'active' : ''} onClick={() => setJuryStep('step_2')} role="tab" aria-selected={juryStep === 'step_2'}>Adım 2 · Analiz</button>
+                <button type="button" className={juryStep === 'step_7' ? 'active' : ''} onClick={() => setJuryStep('step_7')} role="tab" aria-selected={juryStep === 'step_7'}>Adım 7 · Yeniden rota</button>
+              </div>}
+            </div>
+            {juryLoading && <p className="jury-state">Jüri simülasyonu yükleniyor...</p>}
+            {!juryLoading && juryError && <p className="jury-state error">{juryError}</p>}
+            {!juryLoading && !juryError && juryResult && juryStep === 'step_2' && <div className="jury-step-grid">
+              <article><strong>{juryResult.step_2.solution_time_ms.toFixed(2)} ms</strong><span>çözüm süresi</span></article>
+              <article><strong>{juryResult.step_2.osm_source}</strong><span>OSM kaynağı</span></article>
+              <article><strong>{juryResult.step_2.offline_ready ? 'Hazır' : 'Hazır değil'}</strong><span>çevrimdışı çalışma</span></article>
+              <p className="jury-summary">{juryResult.step_2.summary}</p>
+            </div>}
+            {!juryLoading && !juryError && juryResult && juryStep === 'step_7' && <div className="jury-step-content">
+              <p className="jury-summary">{juryResult.step_7.replan_summary}</p>
+              <div className="jury-plan-grid"><span>Eski plan hash<strong>{juryResult.step_7.old_plan.plan_hash}</strong></span><span>Yeni plan hash<strong>{juryResult.step_7.new_plan.plan_hash}</strong></span><span className="jury-badge">Eski kriptografik imza<strong>{juryResult.step_7.old_plan.signature}</strong></span><span className="jury-badge">Yeni kriptografik imza<strong>{juryResult.step_7.new_plan.signature}</strong></span><span>Yeniden rota sürümü<strong>{juryResult.step_7.replan_version}</strong></span><span>Ulaşılamayan bina<strong>{juryResult.step_7.unreachable_buildings.length}</strong></span></div>
+              <div className="jury-teams">{juryResult.step_7.rerouted_teams.map((team) => <article key={team.team_name}><strong>{team.team_name}</strong><span>Rota değişti · {team.new_order.length} bina · Ulaşılamayan {team.unreachable_buildings.length}</span></article>)}</div>
+            </div>}
+          </section>
 
           <div className="operation-layout">
             <div className="operation-map" aria-label="Sanal afet bölgesi, yol ağı, personel ve yeniden hesaplanan rotalar">
