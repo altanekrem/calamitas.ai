@@ -117,7 +117,7 @@
     "slug": "cok-kapan-tutun",
     "title": "Çök-Kapan-Tutun Gerçekten İşe Yarıyor mu?",
     "images": [
-      "/info/cok-kapan-tutun/01.webp"
+      "/info/cok-kapan-tutun/01-hd.webp"
     ]
   },
   {
@@ -176,31 +176,6 @@
       "/info/bolgenizin-afet-riski/04.webp",
       "/info/bolgenizin-afet-riski/05.webp",
       "/info/bolgenizin-afet-riski/06.webp"
-    ]
-  },
-  {
-    "slug": "orman-yanginlarini-erken-fark-etmek",
-    "title": "Orman Yangınları Daha Çıkmadan Nasıl Fark Edilir?",
-    "images": [
-      "/info/orman-yanginlarini-erken-fark-etmek/01.webp",
-      "/info/orman-yanginlarini-erken-fark-etmek/02.webp",
-      "/info/orman-yanginlarini-erken-fark-etmek/03.webp",
-      "/info/orman-yanginlarini-erken-fark-etmek/04.webp",
-      "/info/orman-yanginlarini-erken-fark-etmek/05.webp",
-      "/info/orman-yanginlarini-erken-fark-etmek/06.webp"
-    ]
-  },
-  {
-    "slug": "orman-yanginlarini-onlemek",
-    "title": "Orman Yangınlarını Önlemek İçin Bireysel Olarak Ne Yapabiliriz?",
-    "images": [
-      "/info/orman-yanginlarini-onlemek/01.webp",
-      "/info/orman-yanginlarini-onlemek/02.webp",
-      "/info/orman-yanginlarini-onlemek/03.webp",
-      "/info/orman-yanginlarini-onlemek/04.webp",
-      "/info/orman-yanginlarini-onlemek/05.webp",
-      "/info/orman-yanginlarini-onlemek/06.webp",
-      "/info/orman-yanginlarini-onlemek/07.webp"
     ]
   }
 ]

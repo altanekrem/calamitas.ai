@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { SiteFrame } from '@/components/site-frame';
-import { SystemDashboard } from '@/components/system-dashboard';
+import { SystemAccessGate } from '@/components/system-access-gate';
 
 export const metadata: Metadata = {
   title: 'Proje Sistemi — CALAMITAS AI',
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function SystemPage() {
   return (
     <SiteFrame eyebrow="01 / Proje Sistemi" title="Tek görüntüden canlı operasyon planına." lead="Afet sonrası görüntüyü yükleyin; hasar analizi, personel eşleştirme, kişiye özel rota ve dinamik yeniden planlama zincirini interaktif simülasyonda izleyin." pageClass="system-page">
-      <section className="page-section"><div className="shell"><SystemDashboard /></div></section>
+      <section className="page-section"><div className="shell"><SystemAccessGate /></div></section>
     </SiteFrame>
   );
 }

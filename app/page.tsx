@@ -36,7 +36,7 @@ export default function Home() {
           <div className="ops-card parallax-card" data-parallax="-0.055">
             <div className="ops-top"><span><i /> Operasyon akışı</span><b>CAL-72 / PROTOTİP</b></div>
             <div className="ops-map">
-              <Image src="/media/afet-sonrasi-analiz.webp" alt="Örnek yapay zekâ hasar analizi" fill sizes="(max-width: 900px) 92vw, 42vw" priority />
+              <Image src="/media/sistem-enkaz-ornek-v2.webp" alt="Afet sonrası yüksek çözünürlüklü örnek enkaz görüntüsü" fill sizes="(max-width: 900px) 92vw, 42vw" priority />
               <span className="scan" aria-hidden="true" /><span className="map-label critical">Kritik bölge</span><span className="map-label route">Rota açık</span>
             </div>
             <div className="ops-metrics"><span><small>Örnek tespit</small><strong>78</strong><em>yapı</em></span><span><small>Kritik küme</small><strong>03</strong><em>bölge</em></span><span><small>Senaryo skoru</small><strong>%92,4</strong><em>demo verisi</em></span></div>
@@ -45,7 +45,7 @@ export default function Home() {
       </section>
 
       <section className="route-overview">
-        <div className="shell route-heading"><p className="eyebrow">Site haritası</p><h2>Her bölüm, kendi sayfasında.</h2><p>İhtiyacınız olan içeriğe doğrudan ulaşın; tüm başlıklar ayrı URL’lerde açılır.</p></div>
+        <div className="shell route-heading"><p className="eyebrow">Site haritası</p><h2>Projemizi daha detaylı inceleyin.</h2><p>İhtiyacınız olan içeriğe doğrudan ulaşın; tüm başlıklar ayrı URL’lerde açılır.</p></div>
         <div className="shell route-grid">
           {destinations.map(([href, number, title, body, Icon]) => (
             <a href={href} key={href} className="route-card">

@@ -5,16 +5,16 @@ import { SiteFrame } from '@/components/site-frame';
 
 export const metadata: Metadata = {
   title: 'Sismik Harita — CALAMITAS AI',
-  description: 'USGS verileriyle dünyadaki son 24 saatlik depremleri gösteren güncel sismik harita.',
+  description: 'USGS dünya verileri ve AFAD Türkiye kayıtlarıyla güncel depremleri gösteren etkileşimli sismik harita.',
 };
 
 export default function SeismicPage() {
   return (
-    <SiteFrame eyebrow="02 / Sismik Harita" title="Dünyadaki güncel sismik hareketleri tek haritada izleyin." lead="Harita, USGS Earthquake Hazards Program’ın son 24 saatlik GeoJSON akışını kullanır ve güncel veriyi düzenli aralıklarla yeniler." pageClass="seismic-page">
+    <SiteFrame eyebrow="02 / Sismik Harita" title="Dünya ve Türkiye’deki güncel sismik hareketleri ayrıntılı izleyin." lead="Dünya görünümü USGS’nin son 24 saatlik akışını, Türkiye görünümü ise AFAD’ın son yedi günlük ayrıntılı kayıtlarını kullanır. Harita güncel veriyi düzenli aralıklarla yeniler." pageClass="seismic-page">
       <section className="page-section">
-        <div className="shell right-heading compact"><p className="eyebrow">Canlı veri</p><h2>Son 24 saatte M 2,5 ve üzeri depremler.</h2><p>İşaretlere dokunarak büyüklük, konum, zaman ve kaynak kaydına ulaşabilirsiniz. Bu ekran bilgilendirme amaçlıdır; erken uyarı sistemi değildir.</p></div>
+        <div className="shell right-heading compact"><p className="eyebrow">Canlı veri</p><h2>Dünya ölçeğinden Türkiye ayrıntısına geçin.</h2><p>Dünya ve Türkiye düğmeleriyle kapsamı değiştirin. Listedeki bir olaya dokunarak konuma yakınlaşabilir; büyüklük, zaman, derinlik ve resmî kaynak kaydını inceleyebilirsiniz.</p></div>
         <div className="shell"><LiveSeismicMap /></div>
-        <div className="shell official-source"><span>Veri sağlayıcı: United States Geological Survey (USGS)</span><a href="https://earthquake.usgs.gov/earthquakes/map/" target="_blank" rel="noreferrer">Resmî deprem haritasını aç <ExternalLink aria-hidden="true" /></a></div>
+        <div className="shell official-source"><span>Veri sağlayıcılar: USGS Earthquake Hazards Program ve T.C. İçişleri Bakanlığı AFAD</span><span className="official-links"><a href="https://earthquake.usgs.gov/earthquakes/map/" target="_blank" rel="noreferrer">USGS haritası <ExternalLink aria-hidden="true" /></a><a href="https://deprem.afad.gov.tr/last-earthquakes.html" target="_blank" rel="noreferrer">AFAD son depremler <ExternalLink aria-hidden="true" /></a></span></div>
       </section>
     </SiteFrame>
   );

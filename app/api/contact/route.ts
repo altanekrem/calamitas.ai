@@ -1,16 +1,18 @@
 import { env } from 'cloudflare:workers';
-import { deleteContactMessage, saveContactMessage } from '@/lib/contact-store';
+import { deleteContactMessage, isContactRateLimited, saveContactMessage, updateContactDeliveryStatus } from '@/lib/contact-store';
+import { queueSheetRow } from '@/lib/google-sheets-sync';
+import { formatIstanbulParts } from '@/lib/system-access-store';
 
 const sponsorshipTypes = new Set(['Finansal destek', 'Teknik altyapı', 'Uydu ve saha verisi', 'Donanım ve lojistik', 'İletişim ve görünürlük', 'Diğer iş birliği']);
 const budgetRanges = new Set(['Görüşmede belirlenecek', '25.000 TL altı', '25.000–100.000 TL', '100.000–500.000 TL', '500.000 TL üzeri', 'Ayni / teknik destek']);
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : ''; }
 
-async function deliverSponsorEmail(input: { name: string; email: string; organization: string; phone: string | null; sponsorshipType: string; budget: string; message: string }) {
+async function deliverSponsorEmail(id: string, input: { name: string; email: string; organization: string; phone: string | null; sponsorshipType: string; budget: string; message: string }) {
   const apiKey = env.RESEND_API_KEY;
   const from = env.CONTACT_FROM_EMAIL;
-  const recipient = env.SPONSOR_RECIPIENT_EMAIL || 'calamitasai@gmail.com';
-  if (!apiKey || !from) return false;
+  const recipient = env.SPONSOR_RECIPIENT_EMAIL || 'altanekrem06@gmail.com';
+  if (!apiKey || !from) return 'not_configured' as const;
 
   const content = [
     'Yeni Calamitas AI sponsorluk talebi',
@@ -28,7 +30,7 @@ async function deliverSponsorEmail(input: { name: string; email: string; organiz
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'idempotency-key': `sponsor/${id}` },
     body: JSON.stringify({
       from,
       to: [recipient],
@@ -37,7 +39,7 @@ async function deliverSponsorEmail(input: { name: string; email: string; organiz
       text: content,
     }),
   });
-  return response.ok;
+  return response.ok ? 'delivered' as const : 'failed' as const;
 }
 
 export async function POST(request: Request) {
@@ -61,6 +63,7 @@ export async function POST(request: Request) {
     if (!budgetRanges.has(budget)) return Response.json({ message: 'Geçerli bir katkı aralığı seçin.' }, { status: 400 });
     if (message.length < 20 || message.length > 3000) return Response.json({ message: 'Mesaj 20–3000 karakter arasında olmalıdır.' }, { status: 400 });
     if (consent !== 'accepted') return Response.json({ message: 'Veri saklama onayı gereklidir.' }, { status: 400 });
+    if (await isContactRateLimited(email)) return Response.json({ message: 'Bu e-posta adresiyle kısa sürede çok sayıda talep gönderildi. Lütfen 10 dakika sonra yeniden deneyin.' }, { status: 429 });
 
     const storedMessage = [
       `Katkı alanı: ${sponsorshipType}`,
@@ -69,14 +72,45 @@ export async function POST(request: Request) {
       '',
       message,
     ].join('\n');
-    const receipt = await saveContactMessage({ name, email, organization, subject: 'Sponsorluk', message: storedMessage });
-    let emailDelivered = false;
+    const receipt = await saveContactMessage({ name, email, organization, phone, sponsorshipType, budget, subject: 'Sponsorluk', message: storedMessage });
+    const local = formatIstanbulParts(new Date(receipt.createdAt));
+    let sheetStatus = 'queued';
     try {
-      emailDelivered = await deliverSponsorEmail({ name, email, organization, phone, sponsorshipType, budget, message });
+      const sheetResult = await queueSheetRow({
+        spreadsheetId: '1OdILim7PzmtZSHK1CJHj9dueujT0RmVeOWPx0VEoTCY',
+        sheetName: 'Sponsor Formu',
+        headers: ['Kayıt No', 'Tarih', 'Saat', 'Ad Soyad', 'E-posta', 'Kurum / Marka', 'Telefon', 'Katkı Alanı', 'Tahmini Katkı Aralığı', 'Mesaj'],
+        row: [receipt.id, local.date, local.time, name, email, organization, phone ?? '', sponsorshipType, budget, message],
+      });
+      sheetStatus = sheetResult.accepted ? 'accepted' : 'queued';
     } catch {
-      emailDelivered = false;
+      sheetStatus = 'queue_failed';
     }
-    return Response.json({ ...receipt, emailDelivered, message: emailDelivered ? 'Talep kaydedildi ve e-posta iletildi.' : 'Talep kaydedildi; e-posta iletimi yapılandırılmadı.' }, { status: 201 });
+
+    let emailStatus: 'not_configured' | 'delivered' | 'failed' = 'not_configured';
+    try {
+      emailStatus = await deliverSponsorEmail(receipt.id, { name, email, organization, phone, sponsorshipType, budget, message });
+    } catch {
+      emailStatus = 'failed';
+    }
+    try {
+      await updateContactDeliveryStatus(receipt.id, emailStatus, sheetStatus);
+    } catch {
+      // The submission itself is already durable; delivery status can be reconciled later.
+    }
+
+    const sheetMessage = sheetStatus === 'accepted'
+      ? 'Google Sheets aktarımı güvenli kuyruğa kabul edildi'
+      : sheetStatus === 'queued'
+        ? 'Google Sheets aktarımı site kuyruğunda bekliyor'
+        : 'Google Sheets aktarım kuyruğu geçici olarak oluşturulamadı';
+    const emailMessage = emailStatus === 'delivered'
+      ? 'e-posta iletildi'
+      : emailStatus === 'failed'
+        ? 'e-posta iletimi başarısız oldu'
+        : 'e-posta hizmeti henüz yapılandırılmadı';
+    const messageText = `Talep kalıcı olarak kaydedildi; ${sheetMessage} ve ${emailMessage}.`;
+    return Response.json({ ...receipt, emailStatus, sheetStatus, message: messageText }, { status: 201 });
   } catch {
     return Response.json({ message: 'Talep şu anda kaydedilemedi. Lütfen daha sonra yeniden deneyin.' }, { status: 500 });
   }
@@ -84,9 +118,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const url = new URL(request.url);
-    const id = url.searchParams.get('id') ?? '';
-    const token = url.searchParams.get('token') ?? '';
+    const body = await request.json() as Record<string, unknown>;
+    const id = text(body.id);
+    const token = text(body.token);
     if (!id || !token) return Response.json({ message: 'Silme bilgisi eksik.' }, { status: 400 });
     const deleted = await deleteContactMessage(id, token);
     return deleted ? Response.json({ message: 'Sponsorluk kaydı silindi.' }) : Response.json({ message: 'Kayıt bulunamadı veya silme anahtarı geçersiz.' }, { status: 404 });

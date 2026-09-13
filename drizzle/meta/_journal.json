@@ -15,6 +15,20 @@
       "when": 1788111310614,
       "tag": "0001_superb_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789290164669,
+      "tag": "0002_lean_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789291505841,
+      "tag": "0003_demonic_thunderbird",
+      "breakpoints": true
     }
   ]
 }
