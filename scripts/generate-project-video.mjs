@@ -57,12 +57,12 @@ function drawNetwork(progress, index) {
   ctx.globalAlpha = .22;
   ctx.strokeStyle = index >= 7 ? '#65c7ff' : '#647d98';
   ctx.lineWidth = 2;
-  const rows = [300,410,520,630,740], cols = [55,160,270,380,485];
+  const rows = [610,685,760,835], cols = [55,160,270,380,485];
   for (const y of rows) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  for (const x of cols) { ctx.beginPath(); ctx.moveTo(x,235); ctx.lineTo(x,800); ctx.stroke(); }
+  for (const x of cols) { ctx.beginPath(); ctx.moveTo(x,575); ctx.lineTo(x,855); ctx.stroke(); }
   ctx.globalAlpha = 1;
   for (let i=0;i<18;i++) {
-    const x = 62 + (i%5)*103, y = 320 + Math.floor(i/5)*108;
+    const x = 62 + (i%5)*103, y = 615 + Math.floor(i/5)*74;
     const critical = (i + index) % 6 === 0;
     ctx.fillStyle = critical ? '#ef444b' : '#36536b';
     ctx.fillRect(x-17,y-17,34,34);
@@ -70,17 +70,17 @@ function drawNetwork(progress, index) {
   }
   const routeProgress = ease(progress);
   ctx.strokeStyle = '#6bc2fa'; ctx.lineWidth = 6; ctx.setLineDash([]);
-  ctx.beginPath(); ctx.moveTo(55,760); ctx.lineTo(55,630); ctx.lineTo(270,630); ctx.lineTo(270,410); ctx.lineTo(480,410);
+  ctx.beginPath(); ctx.moveTo(55,840); ctx.lineTo(55,760); ctx.lineTo(270,760); ctx.lineTo(270,610); ctx.lineTo(480,610);
   ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(55 + Math.min(1, routeProgress*2)*0, 760 - Math.min(1, routeProgress*2)*130, 10, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(55, 840 - Math.min(1, routeProgress*2)*80, 10, 0, Math.PI*2); ctx.fill();
   if (index >= 7) {
     ctx.strokeStyle = '#ffc450'; ctx.lineWidth = 4; ctx.setLineDash([12,9]);
-    ctx.beginPath(); ctx.moveTo(55,760); ctx.lineTo(160,760); ctx.lineTo(160,520); ctx.lineTo(480,520); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(55,840); ctx.lineTo(160,840); ctx.lineTo(160,685); ctx.lineTo(480,685); ctx.stroke();
     ctx.setLineDash([]);
   }
   if (index === 9) {
-    ctx.fillStyle = '#d72f36'; ctx.beginPath(); ctx.arc(270,630,18,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '900 24px Arial'; ctx.textAlign='center';ctx.fillText('×',270,638);ctx.textAlign='left';
+    ctx.fillStyle = '#c62828'; ctx.beginPath(); ctx.arc(270,760,18,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '900 24px Arial'; ctx.textAlign='center';ctx.fillText('×',270,768);ctx.textAlign='left';
   }
   ctx.restore();
 }
@@ -93,27 +93,31 @@ function render(time) {
   const alpha = enter * exit;
 
   const gradient = ctx.createLinearGradient(0,0,W,H);
-  gradient.addColorStop(0,'#07111c'); gradient.addColorStop(.56,'#10253a'); gradient.addColorStop(1,'#1d3450');
+  gradient.addColorStop(0,'#121e2e'); gradient.addColorStop(.56,'#1e3a5f'); gradient.addColorStop(1,'#121e2e');
   ctx.fillStyle = gradient; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle = '#c52d34'; ctx.save(); ctx.translate(W-110,-90); ctx.rotate(.24); ctx.fillRect(0,0,220,H+240); ctx.restore();
-  ctx.fillStyle = 'rgba(7,17,28,.83)'; ctx.fillRect(0,0,W,H);
-  drawNetwork(local, sceneIndex);
+  ctx.fillStyle = '#c62828'; ctx.save(); ctx.translate(W-110,-90); ctx.rotate(.24); ctx.fillRect(0,0,220,H+240); ctx.restore();
+  ctx.fillStyle = 'rgba(18,30,46,.86)'; ctx.fillRect(0,0,W,H);
 
   ctx.fillStyle = '#f6f0df'; roundedRect(34,32,472,84,14);
   ctx.fillStyle = '#101b2a'; ctx.font = '900 28px Arial'; ctx.fillText('CALAMITAS AI',58,72);
   ctx.font = '700 12px Arial'; ctx.fillStyle = '#b72a31'; ctx.fillText('BİR DAKİKA BİR HAYAT',59,94);
   ['#ff1749','#fff000','#ff7714'].forEach((color,i)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(417+i*28,74,8,0,Math.PI*2);ctx.fill();});
 
+  ctx.fillStyle = 'rgba(18,30,46,.94)'; roundedRect(26,138,488,402,18);
+  ctx.strokeStyle = 'rgba(242,244,247,.18)'; ctx.lineWidth = 1; ctx.strokeRect(27,139,486,400);
+  ctx.fillStyle = '#c62828'; ctx.fillRect(42,556,456,3);
+  drawNetwork(local, sceneIndex);
+
   ctx.globalAlpha = alpha;
   const lift = (1-enter)*42;
   ctx.fillStyle = '#ff656a'; ctx.font = '900 16px Arial'; ctx.fillText(label,42,170+lift);
-  const titleFont = title.length > 18 ? '900 48px Arial' : '900 60px Arial';
+  const titleFont = title.length > 18 ? '900 46px Arial' : '900 58px Arial';
   const titleLines = wrap(title,456,titleFont,3);
   ctx.fillStyle='#fff';ctx.font=titleFont;
-  titleLines.forEach((line,i)=>ctx.fillText(line,42,230+lift+i*58));
-  const bodyY = 250 + titleLines.length*58;
-  ctx.fillStyle='#d3dde7'; ctx.font='600 21px Arial';
-  wrap(body,446,'600 21px Arial',5).forEach((line,i)=>ctx.fillText(line,42,bodyY+lift+i*31));
+  titleLines.forEach((line,i)=>ctx.fillText(line,42,226+lift+i*55));
+  const bodyY = 242 + titleLines.length*55;
+  ctx.fillStyle='#d3dde7'; ctx.font='600 20px Arial';
+  wrap(body,446,'600 20px Arial',4).forEach((line,i)=>ctx.fillText(line,42,bodyY+lift+i*29));
   ctx.globalAlpha = 1;
 
   const barY = 883;

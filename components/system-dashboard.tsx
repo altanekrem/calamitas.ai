@@ -20,17 +20,13 @@ import {
   UserRoundCheck,
   WifiOff,
 } from 'lucide-react';
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import type { JurySimulationResult } from '@/types/jury';
+import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
 
 type Preview = { url: string; name: string; objectUrl: boolean };
 type Phase = 'idle' | 'analyzing' | 'planning' | 'live';
-type MissionStatus = 'Müsait' | 'Görev Atandı' | 'Görevi Kabul Etti' | 'Yola Çıktı' | 'Bölgeye Ulaştı' | 'Görevde' | 'Görev Tamamlandı' | 'Yardım Gerekiyor';
+type MissionStatus = 'Müsait' | 'Görev Atandı' | 'Görevi Kabul Etti' | 'Yola Çıktı' | 'Bölgeye Ulaştı' | 'Görevde' | 'Görev Tamamlandı' | 'Yardım Gerekiyor' | 'Rota Bulunamadı';
 type GridPoint = { col: number; row: number; x: number; y: number };
 type HelpRequest = { requesterId: number; targetId: string };
-type JuryStep = 'step_2' | 'step_7';
-
-const JURY_FIXTURE_URL = '/fixtures/jury_simulation_step2_step7.json';
 
 const GRID_X = [5, 18, 31, 44, 57, 70, 83, 96];
 const GRID_Y = [6, 20, 34, 48, 62, 76, 91];
@@ -82,14 +78,19 @@ const PEOPLE = Array.from({ length: 36 }, (_, index) => {
   };
 });
 
-const CLOSURES = [
-  { col: 4, row: 2, label: 'Köprü geçişi kapalı' },
-  { col: 3, row: 4, label: 'Yeni yol kapanması' },
-  { col: 6, row: 3, label: 'Enkaz nedeniyle geçiş yok' },
-];
-
 function keyOf(point: Pick<GridPoint, 'col' | 'row'>) { return `${point.col}:${point.row}`; }
 function pointAt(col: number, row: number): GridPoint { return { col, row, x: GRID_X[col], y: GRID_Y[row] }; }
+const DEFAULT_CLOSED_NODE_KEYS = ['4:2'];
+const ROAD_POINTS = GRID_Y.flatMap((_, row) => GRID_X.map((__, col) => pointAt(col, row)));
+
+function pointFromKey(key: string) {
+  const [col, row] = key.split(':').map(Number);
+  return pointAt(col, row);
+}
+
+function roadPointLabel(point: Pick<GridPoint, 'col' | 'row'>) {
+  return `Yol noktası ${point.row + 1}-${point.col + 1}`;
+}
 
 function nearestGridPoint(x: number, y: number) {
   const col = GRID_X.reduce((best, value, index) => Math.abs(value - x) < Math.abs(GRID_X[best] - x) ? index : best, 0);
@@ -97,7 +98,8 @@ function nearestGridPoint(x: number, y: number) {
   return pointAt(col, row);
 }
 
-function findPath(start: GridPoint, end: GridPoint, blocked: Set<string>) {
+function findPath(start: GridPoint, end: GridPoint, blocked: Set<string>): GridPoint[] | null {
+  if (blocked.has(keyOf(start)) || blocked.has(keyOf(end))) return null;
   const queue: GridPoint[][] = [[start]];
   const visited = new Set([keyOf(start)]);
   const directions = [[0, -1], [-1, 0], [1, 0], [0, 1]] as const;
@@ -112,12 +114,12 @@ function findPath(start: GridPoint, end: GridPoint, blocked: Set<string>) {
       if (col < 0 || col >= GRID_X.length || row < 0 || row >= GRID_Y.length) continue;
       const next = pointAt(col, row);
       const key = keyOf(next);
-      if (visited.has(key) || (blocked.has(key) && key !== keyOf(end))) continue;
+      if (visited.has(key) || blocked.has(key)) continue;
       visited.add(key);
       queue.push([...path, next]);
     }
   }
-  return [start, end];
+  return null;
 }
 
 function assignmentScore(person: typeof PEOPLE[number], target: typeof TARGETS[number]) {
@@ -129,11 +131,11 @@ function assignmentScore(person: typeof PEOPLE[number], target: typeof TARGETS[n
   return Math.max(0, Math.min(100, Math.round(role + equipment + vehicle + priority - distance * .22)));
 }
 
-function routeKey(path: GridPoint[]) { return path.map(keyOf).join('|'); }
+function routeKey(path: GridPoint[] | null) { return path ? path.map(keyOf).join('|') : 'ROTA_YOK'; }
 
-function buildRoutePlans(criticalCount: number, closureCount: number, helpRequests: HelpRequest[]) {
+function buildRoutePlans(criticalCount: number, closedNodeKeys: string[], helpRequests: HelpRequest[]) {
   const targets = TARGETS.slice(0, criticalCount);
-  const blocked = new Set(CLOSURES.slice(0, closureCount).map(keyOf));
+  const blocked = new Set(closedNodeKeys);
   const helpers = new Map<number, string>();
   helpRequests.forEach((request, index) => helpers.set(PEOPLE.length - index, request.targetId));
 
@@ -146,16 +148,16 @@ function buildRoutePlans(criticalCount: number, closureCount: number, helpReques
     const start = nearestGridPoint(person.startX, person.startY);
     const end = nearestGridPoint(target.x, target.y);
     const path = findPath(start, end, blocked);
-    const detourPoint = path.length > 2 ? path[Math.floor(path.length / 2)] : null;
+    const detourPoint = path && path.length > 2 ? path[Math.floor(path.length / 2)] : null;
     const alternativeBlocked = new Set(blocked);
     if (detourPoint && keyOf(detourPoint) !== keyOf(start) && keyOf(detourPoint) !== keyOf(end)) alternativeBlocked.add(keyOf(detourPoint));
-    const alternative = findPath(start, end, alternativeBlocked);
-    return { person, target, path, alternative, score: assignmentScore(person, target), isSupport: Boolean(requestedTarget) };
+    const alternative = path ? findPath(start, end, alternativeBlocked) : null;
+    return { person, target, start, path, alternative, score: assignmentScore(person, target), isSupport: Boolean(requestedTarget) };
   });
 }
 
-function pointAlongPath(path: GridPoint[], ratio: number) {
-  if (path.length < 2) return path[0] ?? pointAt(0, 0);
+function pointAlongPath(path: GridPoint[] | null, ratio: number, fallback: GridPoint) {
+  if (!path || path.length < 2) return path?.[0] ?? fallback;
   const lengths = path.slice(1).map((point, index) => Math.hypot(point.x - path[index].x, point.y - path[index].y));
   const total = lengths.reduce((sum, value) => sum + value, 0);
   let remaining = total * Math.max(0, Math.min(1, ratio));
@@ -184,10 +186,11 @@ function personStatus(progress: number, phase: Phase, index: number, acknowledge
 }
 
 function countPlanChanges(current: ReturnType<typeof buildRoutePlans>, next: ReturnType<typeof buildRoutePlans>) {
-  return next.filter((plan, index) => plan.target.id !== current[index]?.target.id || routeKey(plan.path) !== routeKey(current[index]?.path ?? [])).length;
+  return next.filter((plan, index) => plan.target.id !== current[index]?.target.id || routeKey(plan.path) !== routeKey(current[index]?.path ?? null)).length;
 }
 
-function routeLabel(path: GridPoint[], entry: string) {
+function routeLabel(path: GridPoint[] | null, entry: string) {
+  if (!path) return 'Ulaşılabilir rota bulunamadı';
   const checkpoints = Math.max(0, path.length - 2);
   return `Toplanma ${(path[0]?.col ?? 0) + 1} → ${checkpoints} kontrol noktası → ${entry}`;
 }
@@ -198,7 +201,9 @@ export function SystemDashboard() {
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [revision, setRevision] = useState(1);
-  const [closureCount, setClosureCount] = useState(1);
+  const [closedNodeKeys, setClosedNodeKeys] = useState<string[]>(DEFAULT_CLOSED_NODE_KEYS);
+  const [editingClosures, setEditingClosures] = useState(false);
+  const [focusedRoadNode, setFocusedRoadNode] = useState(20);
   const [criticalCount, setCriticalCount] = useState(8);
   const [routeUpdates, setRouteUpdates] = useState(0);
   const [selectedPersonId, setSelectedPersonId] = useState(17);
@@ -207,10 +212,6 @@ export function SystemDashboard() {
   const [fileMessage, setFileMessage] = useState('');
   const [activity, setActivity] = useState(['Operasyon senaryosu analize hazır.']);
   const [planChange, setPlanChange] = useState('v1 · Başlangıç planı hazırlanmayı bekliyor.');
-  const [juryResult, setJuryResult] = useState<JurySimulationResult | null>(null);
-  const [juryStep, setJuryStep] = useState<JuryStep>('step_2');
-  const [juryLoading, setJuryLoading] = useState(false);
-  const [juryError, setJuryError] = useState('');
 
   useEffect(() => () => {
     if (after?.objectUrl) URL.revokeObjectURL(after.url);
@@ -242,15 +243,15 @@ export function SystemDashboard() {
     return () => window.clearInterval(timer);
   }, [phase, paused, progress]);
 
-  const routePlans = useMemo(() => buildRoutePlans(criticalCount, closureCount, helpRequests), [criticalCount, closureCount, helpRequests]);
+  const routePlans = useMemo(() => buildRoutePlans(criticalCount, closedNodeKeys, helpRequests), [criticalCount, closedNodeKeys, helpRequests]);
   const movingPeople = useMemo(() => routePlans.map((plan, index) => {
     const personalProgress = phase === 'live' ? Math.min(100, progress + (index % 6) * 4) : 0;
-    const position = pointAlongPath(plan.path, personalProgress / 100);
+    const position = pointAlongPath(plan.path, personalProgress / 100, plan.start);
     return {
       ...plan,
       x: position.x,
       y: position.y,
-      status: personStatus(progress, phase, index, acknowledgedIds.includes(plan.person.id), helpRequests.some((request) => request.requesterId === plan.person.id)),
+      status: plan.path ? personStatus(progress, phase, index, acknowledgedIds.includes(plan.person.id), helpRequests.some((request) => request.requesterId === plan.person.id)) : 'Rota Bulunamadı' as MissionStatus,
     };
   }), [acknowledgedIds, helpRequests, phase, progress, routePlans]);
 
@@ -260,7 +261,9 @@ export function SystemDashboard() {
   const completedTasks = phase === 'live' ? Math.min(taskCount, Math.floor(progress / 12)) : 0;
   const enRoutePersonnel = movingPeople.filter((person) => person.status === 'Yola Çıktı').length;
   const resourcePackages = movingPeople.filter((person) => !['Müsait', 'Görev Atandı'].includes(person.status)).length;
-  const averageEta = Math.max(1, Math.round(movingPeople.reduce((sum, plan) => sum + Math.max(1, plan.person.eta * (1 - progress / 100)), 0) / movingPeople.length));
+  const reachablePeople = movingPeople.filter((plan) => plan.path);
+  const averageEta = reachablePeople.length ? Math.max(1, Math.round(reachablePeople.reduce((sum, plan) => sum + Math.max(1, plan.person.eta * (1 - progress / 100)), 0) / reachablePeople.length)) : 0;
+  const unreachableRouteCount = routePlans.filter((plan) => !plan.path).length;
   const activeCriticalIndices = CRITICAL_BUILDING_INDICES.slice(0, criticalCount);
   const visibleRoutes = routePlans.filter((plan, index) => index < 10 || plan.person.id === selectedPersonId);
 
@@ -281,26 +284,9 @@ export function SystemDashboard() {
   }
 
   function loadExample() {
-    setAfter({ url: '/media/afet-sonrasi-analiz.webp', name: 'örnek-afet-sonrası.webp', objectUrl: false });
-    setFileMessage('Örnek afet sonrası görüntüsü yüklendi.');
+    setAfter({ url: '/media/sistem-enkaz-ornek-v2.webp', name: 'örnek-enkaz-görüntüsü-v2.webp', objectUrl: false });
+    setFileMessage('Yeni örnek enkaz görüntüsü yüklendi.');
     resetScenario(false);
-  }
-
-  async function loadJurySimulation() {
-    setJuryLoading(true);
-    setJuryError('');
-    const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
-    const endpoint = apiBase ? `${apiBase}/jury/simulation` : JURY_FIXTURE_URL;
-    try {
-      const response = await fetch(endpoint, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Jüri simülasyonu alınamadı (${response.status}).`);
-      setJuryResult(await response.json() as JurySimulationResult);
-    } catch (error) {
-      setJuryResult(null);
-      setJuryError(error instanceof Error ? error.message : 'Jüri simülasyonu alınamadı.');
-    } finally {
-      setJuryLoading(false);
-    }
   }
 
   function startAnalysis() {
@@ -309,34 +295,65 @@ export function SystemDashboard() {
     setProgress(0);
     setPaused(false);
     setRevision(1);
-    setClosureCount(1);
+    setClosedNodeKeys(DEFAULT_CLOSED_NODE_KEYS);
+    setEditingClosures(false);
     setCriticalCount(8);
     setRouteUpdates(0);
     setAcknowledgedIds([]);
     setHelpRequests([]);
     setPlanChange('v1 · Görüntü analizi ve ilk atamalar hazırlanıyor.');
     setActivity(['Afet sonrası görüntü alındı; analiz başlatıldı.']);
-    void loadJurySimulation();
   }
 
-  function addClosure() {
-    if (phase !== 'live' || closureCount >= CLOSURES.length) return;
-    const nextClosureCount = closureCount + 1;
-    const nextPlans = buildRoutePlans(criticalCount, nextClosureCount, helpRequests);
+  function applyClosureChange(nextClosedNodeKeys: string[], changeLabel: string) {
+    if (phase !== 'live') return;
+    const nextPlans = buildRoutePlans(criticalCount, nextClosedNodeKeys, helpRequests);
     const changed = countPlanChanges(routePlans, nextPlans);
     const nextRevision = revision + 1;
-    setClosureCount(nextClosureCount);
+    const unreachable = nextPlans.filter((plan) => !plan.path).length;
+    setClosedNodeKeys(nextClosedNodeKeys);
     setRevision(nextRevision);
     setRouteUpdates((value) => value + changed);
-    setProgress((value) => Math.max(10, value - 8));
-    setPlanChange(`v${nextRevision} · ${CLOSURES[nextClosureCount - 1].label}; ${changed} güzergâh gerçekten değişti.`);
-    setActivity((items) => [`${CLOSURES[nextClosureCount - 1].label}; ${changed} personelin ana güzergâhı yeniden hesaplandı.`, ...items].slice(0, 6));
+    if (nextClosedNodeKeys.length > closedNodeKeys.length) setProgress((value) => Math.max(10, value - 8));
+    const availability = unreachable ? ` ${unreachable} görev için ulaşılabilir rota kalmadı.` : ' Tüm görevler için ulaşılabilir rota var.';
+    setPlanChange(`v${nextRevision} · ${changeLabel}; ${changed} güzergâh değişti.${availability}`);
+    setActivity((items) => [`${changeLabel}; ${changed} personelin ana güzergâhı yeniden hesaplandı.${availability}`, ...items].slice(0, 6));
+  }
+
+  function toggleClosure(point: GridPoint) {
+    const key = keyOf(point);
+    const isClosed = closedNodeKeys.includes(key);
+    const nextClosedNodeKeys = isClosed ? closedNodeKeys.filter((item) => item !== key) : [...closedNodeKeys, key];
+    applyClosureChange(nextClosedNodeKeys, `${roadPointLabel(point)} ${isClosed ? 'yeniden açıldı' : 'kapatıldı'}`);
+  }
+
+  function clearClosures() {
+    if (!closedNodeKeys.length) return;
+    applyClosureChange([], 'Tüm manuel yol kapanmaları kaldırıldı');
+  }
+
+  function handleRoadNodeKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const rowStart = Math.floor(index / GRID_X.length) * GRID_X.length;
+    const rowEnd = rowStart + GRID_X.length - 1;
+    let nextIndex = index;
+    const handledKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (!handledKeys.includes(event.key)) return;
+    if (event.key === 'ArrowLeft') nextIndex = Math.max(rowStart, index - 1);
+    if (event.key === 'ArrowRight') nextIndex = Math.min(rowEnd, index + 1);
+    if (event.key === 'ArrowUp') nextIndex = Math.max(0, index - GRID_X.length);
+    if (event.key === 'ArrowDown') nextIndex = Math.min(ROAD_POINTS.length - 1, index + GRID_X.length);
+    if (event.key === 'Home') nextIndex = rowStart;
+    if (event.key === 'End') nextIndex = rowEnd;
+    event.preventDefault();
+    if (nextIndex === index) return;
+    setFocusedRoadNode(nextIndex);
+    document.getElementById(`road-node-${nextIndex}`)?.focus();
   }
 
   function addCriticalTarget() {
     if (phase !== 'live' || criticalCount >= TARGETS.length) return;
     const nextCriticalCount = criticalCount + 1;
-    const nextPlans = buildRoutePlans(nextCriticalCount, closureCount, helpRequests);
+    const nextPlans = buildRoutePlans(nextCriticalCount, closedNodeKeys, helpRequests);
     const changed = countPlanChanges(routePlans, nextPlans);
     const nextRevision = revision + 1;
     const newTarget = TARGETS[nextCriticalCount - 1];
@@ -356,7 +373,7 @@ export function SystemDashboard() {
   function requestHelp() {
     if (phase !== 'live' || !selectedPerson || helpRequests.some((request) => request.requesterId === selectedPerson.person.id)) return;
     const nextHelpRequests = [...helpRequests, { requesterId: selectedPerson.person.id, targetId: selectedPerson.target.id }];
-    const nextPlans = buildRoutePlans(criticalCount, closureCount, nextHelpRequests);
+    const nextPlans = buildRoutePlans(criticalCount, closedNodeKeys, nextHelpRequests);
     const changed = countPlanChanges(routePlans, nextPlans);
     const nextRevision = revision + 1;
     setHelpRequests(nextHelpRequests);
@@ -371,7 +388,8 @@ export function SystemDashboard() {
     setProgress(0);
     setPaused(false);
     setRevision(1);
-    setClosureCount(1);
+    setClosedNodeKeys(DEFAULT_CLOSED_NODE_KEYS);
+    setEditingClosures(false);
     setCriticalCount(8);
     setRouteUpdates(0);
     setAcknowledgedIds([]);
@@ -413,47 +431,47 @@ export function SystemDashboard() {
       </div>
 
       {phase !== 'idle' && selectedPerson && (
-        <section className="operation-console" aria-live="polite">
+        <section className="operation-console">
           <header className="operation-console-head">
             <div><span className={`live-indicator ${phase === 'live' ? 'ready' : ''}`}><Radio aria-hidden="true" /> {phase === 'live' ? 'Canlı simülasyon' : phase === 'planning' ? 'Görev planlanıyor' : 'Görüntü analiz ediliyor'}</span><h2>Afet operasyon paneli</h2></div>
             <span>Görev Planı v{revision}</span>
           </header>
-          <p className="plan-change-note"><RefreshCw aria-hidden="true" /> {planChange}</p>
+          <p className="plan-change-note" role="status" aria-live="polite" aria-atomic="true"><RefreshCw aria-hidden="true" /> {planChange}</p>
 
-          <section className="jury-panel" aria-label="Jüri simülasyonu sonucu">
-            <div className="jury-panel-head">
-              <div><span className="mission-kicker"><Satellite aria-hidden="true" /> Jüri simülasyonu</span><small>{juryResult ? `Şema ${juryResult.simulation_schema_version} · ${juryResult.incident_id}` : 'Backend sözleşmesi bekleniyor'}</small></div>
-              {juryResult && <div className="jury-tabs" role="tablist" aria-label="Jüri simülasyonu adımları">
-                <button type="button" className={juryStep === 'step_2' ? 'active' : ''} onClick={() => setJuryStep('step_2')} role="tab" aria-selected={juryStep === 'step_2'}>Adım 2 · Analiz</button>
-                <button type="button" className={juryStep === 'step_7' ? 'active' : ''} onClick={() => setJuryStep('step_7')} role="tab" aria-selected={juryStep === 'step_7'}>Adım 7 · Yeniden rota</button>
-              </div>}
+          <div className="operation-metrics">
+            <article><strong>{BUILDINGS.length}</strong><span>analiz edilen yapı</span></article>
+            <article><strong>{criticalCount}</strong><span>kritik hedef</span></article>
+            <article><strong>{PEOPLE.length}</strong><span>aktif personel</span></article>
+            <article><strong>{taskCount}</strong><span>oluşturulan görev</span></article>
+            <article><strong>{acceptedTasks}</strong><span>kabul edilen görev</span></article>
+            <article><strong>{averageEta} dk</strong><span>ortalama tahmini intikal</span></article>
+          </div>
+
+          <div className={`road-editor ${editingClosures ? 'is-active' : ''}`}>
+            <div>
+              <p className="road-editor-title" id="road-editor-title"><Route aria-hidden="true" /> Yol kapanması seçimi <span>{closedNodeKeys.length} kapalı nokta</span></p>
+              <p id="road-editor-help">Harita üzerindeki yol kesişimlerini elle açıp kapatın. Her değişiklik görev rotalarını ve plan sürümünü yeniden hesaplar.</p>
             </div>
-            {juryLoading && <p className="jury-state">Jüri simülasyonu yükleniyor...</p>}
-            {!juryLoading && juryError && <p className="jury-state error">{juryError}</p>}
-            {!juryLoading && !juryError && juryResult && juryStep === 'step_2' && <div className="jury-step-grid">
-              <article><strong>{juryResult.step_2.solution_time_ms.toFixed(2)} ms</strong><span>çözüm süresi</span></article>
-              <article><strong>{juryResult.step_2.osm_source}</strong><span>OSM kaynağı</span></article>
-              <article><strong>{juryResult.step_2.offline_ready ? 'Hazır' : 'Hazır değil'}</strong><span>çevrimdışı çalışma</span></article>
-              <p className="jury-summary">{juryResult.step_2.summary}</p>
-            </div>}
-            {!juryLoading && !juryError && juryResult && juryStep === 'step_7' && <div className="jury-step-content">
-              <p className="jury-summary">{juryResult.step_7.replan_summary}</p>
-              <div className="jury-plan-grid"><span>Eski plan hash<strong>{juryResult.step_7.old_plan.plan_hash}</strong></span><span>Yeni plan hash<strong>{juryResult.step_7.new_plan.plan_hash}</strong></span><span className="jury-badge">Eski kriptografik imza<strong>{juryResult.step_7.old_plan.signature}</strong></span><span className="jury-badge">Yeni kriptografik imza<strong>{juryResult.step_7.new_plan.signature}</strong></span><span>Yeniden rota sürümü<strong>{juryResult.step_7.replan_version}</strong></span><span>Ulaşılamayan bina<strong>{juryResult.step_7.unreachable_buildings.length}</strong></span></div>
-              <div className="jury-teams">{juryResult.step_7.rerouted_teams.map((team) => <article key={team.team_name}><strong>{team.team_name}</strong><span>Rota değişti · {team.new_order.length} bina · Ulaşılamayan {team.unreachable_buildings.length}</span></article>)}</div>
-            </div>}
-          </section>
+            <div className="road-editor-actions">
+              <button type="button" onClick={() => setEditingClosures((value) => !value)} disabled={phase !== 'live'} aria-pressed={editingClosures}><Route aria-hidden="true" /> {editingClosures ? 'Seçimi bitir' : 'Haritadan seç'}</button>
+              <button type="button" onClick={clearClosures} disabled={phase !== 'live' || !closedNodeKeys.length}><RefreshCw aria-hidden="true" /> Tümünü aç</button>
+            </div>
+            <div className="road-editor-status"><span className={unreachableRouteCount ? 'has-warning' : ''}>{unreachableRouteCount ? `${unreachableRouteCount} görev için rota bulunamadı` : 'Tüm görevler ulaşılabilir'}</span></div>
+            {closedNodeKeys.length ? <div className="closed-road-list" aria-label="Seçili kapalı yol noktaları">{closedNodeKeys.map((key) => { const point = pointFromKey(key); return <button type="button" key={key} onClick={() => toggleClosure(point)} disabled={phase !== 'live'} aria-label={`${roadPointLabel(point)} kapanmasını kaldır`} title="Yolu yeniden aç"><span>{roadPointLabel(point)}</span><b aria-hidden="true">×</b></button>; })}</div> : <p className="no-road-closures">Manuel olarak işaretlenmiş yol kapanması yok.</p>}
+          </div>
 
           <div className="operation-layout">
-            <div className="operation-map" aria-label="Sanal afet bölgesi, yol ağı, personel ve yeniden hesaplanan rotalar">
+            <div className={`operation-map ${editingClosures ? 'is-selecting-closures' : ''}`} role="region" aria-labelledby="road-editor-title" aria-describedby="road-editor-help">
               <div className="map-grid" aria-hidden="true" />
               <svg className="route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <polyline className="alternative-route" points={selectedPerson.alternative.map((point) => `${point.x},${point.y}`).join(' ')} />
-                {visibleRoutes.map((plan) => <polyline className={plan.person.id === selectedPersonId ? 'selected-route' : ''} key={plan.person.id} points={plan.path.map((point) => `${point.x},${point.y}`).join(' ')} />)}
+                {selectedPerson.alternative && <polyline className="alternative-route" points={selectedPerson.alternative.map((point) => `${point.x},${point.y}`).join(' ')} />}
+                {visibleRoutes.map((plan) => plan.path && <polyline className={plan.person.id === selectedPersonId ? 'selected-route' : ''} key={plan.person.id} points={plan.path.map((point) => `${point.x},${point.y}`).join(' ')} />)}
               </svg>
               {BUILDINGS.map((building, index) => <span key={building.id} className={`sim-building ${activeCriticalIndices.includes(index) ? 'critical' : building.severity}`} style={{ left: `${building.x}%`, top: `${building.y}%` }} title={`${building.id} — ${activeCriticalIndices.includes(index) ? 'kritik hedef' : 'analiz edildi'}`} />)}
-              {CLOSURES.slice(0, closureCount).map((closure) => <span key={closure.label} className="road-closure" style={{ left: `${GRID_X[closure.col]}%`, top: `${GRID_Y[closure.row]}%` }} title={closure.label}>×</span>)}
-              {movingPeople.map((plan) => <button key={plan.person.id} type="button" className={`person-marker ${plan.person.id === selectedPersonId ? 'selected' : ''} ${plan.isSupport ? 'support' : ''}`} style={{ left: `${plan.x}%`, top: `${plan.y}%` }} onClick={() => setSelectedPersonId(plan.person.id)} aria-label={`${plan.person.name}, ${plan.status}`} title={`${plan.person.name} — ${plan.status}`}><span>{plan.person.id}</span></button>)}
-              <div className="map-legend"><span><i className="legend-person" /> Personel</span><span><i className="legend-critical" /> Kritik yapı</span><span><i className="legend-closure" /> Kapalı yol</span><span><i className="legend-alternative" /> Alternatif rota</span></div>
+              {!editingClosures && closedNodeKeys.map((key) => { const point = pointFromKey(key); return <span key={key} className="road-closure" style={{ left: `${point.x}%`, top: `${point.y}%` }} title={`${roadPointLabel(point)} kapalı`}>×</span>; })}
+              {editingClosures && <div className="road-node-layer" role="group" aria-label="Seçilebilir yol kesişimleri">{ROAD_POINTS.map((point, index) => { const closed = closedNodeKeys.includes(keyOf(point)); return <button id={`road-node-${index}`} key={keyOf(point)} type="button" className={`road-node-button ${closed ? 'is-closed' : ''}`} style={{ left: `${point.x}%`, top: `${point.y}%` }} onClick={() => toggleClosure(point)} onFocus={() => setFocusedRoadNode(index)} onKeyDown={(event) => handleRoadNodeKeyDown(event, index)} aria-pressed={closed} aria-label={`${roadPointLabel(point)} ${closed ? 'kapalı; yeniden açmak' : 'açık; kapatmak'} için basın`} title={`${roadPointLabel(point)} — ${closed ? 'kapalı' : 'açık'}`} tabIndex={index === focusedRoadNode ? 0 : -1}><span aria-hidden="true">{closed ? '×' : ''}</span></button>; })}</div>}
+              {movingPeople.map((plan) => <button key={plan.person.id} type="button" className={`person-marker ${plan.person.id === selectedPersonId ? 'selected' : ''} ${plan.isSupport ? 'support' : ''}`} style={{ left: `${plan.x}%`, top: `${plan.y}%` }} onClick={() => setSelectedPersonId(plan.person.id)} aria-label={`${plan.person.name}, ${plan.status}`} title={`${plan.person.name} — ${plan.status}`} disabled={editingClosures}><span>{plan.person.id}</span></button>)}
+              <div className="map-legend"><span><i className="legend-person" /> Personel</span><span><i className="legend-critical" /> Kritik yapı</span><span><i className="legend-closure" /> Kapalı yol</span>{editingClosures && <span><i className="legend-road-node" /> Seçilebilir nokta</span>}<span><i className="legend-alternative" /> Alternatif rota</span></div>
             </div>
 
             <aside className="mission-panel">
@@ -480,7 +498,6 @@ export function SystemDashboard() {
 
           <div className="simulation-controls">
             <button type="button" onClick={() => setPaused((value) => !value)} disabled={phase !== 'live'}>{paused ? <><Play aria-hidden="true" /> Devam ettir</> : <><Pause aria-hidden="true" /> Duraklat</>}</button>
-            <button type="button" onClick={addClosure} disabled={phase !== 'live' || closureCount >= CLOSURES.length}><Route aria-hidden="true" /> Yeni yol kapanması</button>
             <button type="button" onClick={addCriticalTarget} disabled={phase !== 'live' || criticalCount >= TARGETS.length}><Siren aria-hidden="true" /> Yeni kritik hasar</button>
             <button type="button" onClick={() => resetScenario(false)}><RefreshCw aria-hidden="true" /> Senaryoyu sıfırla</button>
           </div>

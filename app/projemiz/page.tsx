@@ -42,7 +42,7 @@ export default function ProjectPage() {
       <section className="page-section">
         <div className="shell right-heading"><p className="eyebrow">Problem</p><h2>Afet sonrasında asıl soru yalnızca “hasar nerede?” değildir.</h2><p>Büyük ölçekli afetlerde tespit, öncelik, personel, ekipman ve erişim verileri farklı kanallarda kalabilir. Proje; özellikle ilk 72 saatte görüntüden saha kararına uzanan bu kopukluğu azaltmaya odaklanır.</p></div>
         <div className="shell project-feature">
-          <div className="project-image"><Image src="/media/afet-sonrasi-analiz.webp" alt="Afet sonrası örnek görüntü analizi" fill sizes="(max-width: 900px) 92vw, 50vw" /></div>
+          <div className="project-image"><Image src="/media/sistem-enkaz-ornek-v2.webp" alt="Afet sonrası yüksek çözünürlüklü örnek enkaz görüntüsü" fill sizes="(max-width: 900px) 92vw, 50vw" /></div>
           <div><p className="eyebrow">Çözüm yaklaşımı</p><h3>Tek görüntüyü, uygulanabilir ve güncellenebilir bir operasyon planına dönüştürmek.</h3><p>Kullanıcı yalnızca güncel afet görüntüsünü yükler. Hedeflenen sistem geçmiş referansı konumdan bulur; hasar ve müdahale ihtiyacını çıkarır; personel ile kaynakları eşleştirir; her görevli için ana ve alternatif rota içeren görev paketi üretir.</p><p>Yeni yol kapanması, hasar veya yardım bildirimi geldiğinde plan sessizce değiştirilmez; yeni sürüm oluşturulur ve etkilenen ekiplere değişiklik özeti iletilir.</p><p className="project-caveat">Web sitesindeki operasyon paneli sentetik verilerle çalışan interaktif demonstrasyondur. Gerçek afet kullanımından önce doğrulanmış veri, kurum entegrasyonu, saha testi, güvenlik denetimi ve yetkili insan onayı gerekir.</p></div>
         </div>
       </section>

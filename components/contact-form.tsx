@@ -1,14 +1,37 @@
 'use client';
 
 import { CheckCircle2, Send, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
+type Receipt = { id: string; deleteToken: string; createdAt?: string };
+const STORAGE_KEY = 'calamitas-contact-receipts';
 
 export function ContactForm() {
   const [state, setState] = useState<FormState>('idle');
   const [message, setMessage] = useState('');
-  const [receipt, setReceipt] = useState<{ id: string; deleteToken: string } | null>(null);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem('calamitas-contact-receipt');
+        if (stored) {
+          const parsed = JSON.parse(stored) as Receipt | Receipt[];
+          const recovered = (Array.isArray(parsed) ? parsed : [parsed]).filter((item) => item?.id && item?.deleteToken);
+          setReceipts(recovered);
+          setState('success');
+          setMessage('Bu tarayıcıdan daha önce gönderilen sponsorluk kayıtlarını aşağıdan yönetebilirsiniz.');
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(recovered));
+          window.localStorage.removeItem('calamitas-contact-receipt');
+        }
+      } catch {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem('calamitas-contact-receipt');
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function submit(form: HTMLFormElement) {
     setState('submitting');
@@ -20,29 +43,43 @@ export function ContactForm() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const result = await response.json() as { message?: string; id?: string; deleteToken?: string; emailDelivered?: boolean };
+      const result = await response.json() as { message?: string; id?: string; deleteToken?: string; emailStatus?: string; sheetStatus?: string };
       if (!response.ok) throw new Error(result.message ?? 'Form gönderilemedi.');
       form.reset();
-      if (result.id && result.deleteToken) setReceipt({ id: result.id, deleteToken: result.deleteToken });
+      if (result.id && result.deleteToken) {
+        const nextReceipt = { id: result.id, deleteToken: result.deleteToken, createdAt: new Date().toISOString() };
+        setReceipts((current) => {
+          const updated = [...current.filter((item) => item.id !== nextReceipt.id), nextReceipt];
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
       setState('success');
-      setMessage(result.emailDelivered
-        ? 'Sponsorluk talebiniz kaydedildi ve calamitasai@gmail.com adresine iletildi.'
-        : 'Sponsorluk talebiniz kalıcı olarak kaydedildi. E-posta gönderim hizmeti henüz yapılandırılmadığı için otomatik e-posta iletimi bekliyor.');
+      setMessage(result.message ?? 'Sponsorluk talebiniz kaydedildi.');
     } catch (error) {
       setState('error');
       setMessage(error instanceof Error ? error.message : 'Beklenmeyen bir hata oluştu.');
     }
   }
 
-  async function removeMessage() {
-    if (!receipt || !window.confirm('Bu sponsorluk kaydını kalıcı olarak silmek istediğinize emin misiniz?')) return;
+  async function removeMessage(receipt: Receipt) {
+    if (!window.confirm('Bu sponsorluk kaydını kalıcı olarak silmek istediğinize emin misiniz?')) return;
     try {
-      const response = await fetch(`/api/contact?id=${encodeURIComponent(receipt.id)}&token=${encodeURIComponent(receipt.deleteToken)}`, { method: 'DELETE' });
+      const response = await fetch('/api/contact', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: receipt.id, token: receipt.deleteToken }),
+      });
       const result = await response.json() as { message?: string };
       if (!response.ok) throw new Error(result.message ?? 'Kayıt silinemedi.');
-      setReceipt(null);
-      setState('idle');
-      setMessage('Sponsorluk kaydınız silindi. Daha önce gönderilmiş bir e-posta varsa bu işlem e-postayı geri çekmez.');
+      setReceipts((current) => {
+        const updated = current.filter((item) => item.id !== receipt.id);
+        if (updated.length) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        else window.localStorage.removeItem(STORAGE_KEY);
+        return updated;
+      });
+      setState('success');
+      setMessage('Sponsorluk kaydınız ve bağlı Sheets kaydı silindi ya da silme kuyruğuna alındı. Daha önce gönderilmiş bir e-posta geri çekilemez.');
     } catch (error) {
       setState('error');
       setMessage(error instanceof Error ? error.message : 'Kayıt silinemedi.');
@@ -67,10 +104,14 @@ export function ContactForm() {
       <label className="consent"><input name="consent" type="checkbox" value="accepted" required /><span>Bilgilerimin sponsorluk ve iş birliği değerlendirmesi amacıyla Calamitas AI proje kayıtlarında saklanmasını kabul ediyorum.</span></label>
       <label className="honeypot" aria-hidden="true">Web sitesi<input name="website" tabIndex={-1} autoComplete="off" /></label>
       <div className="form-footer">
-        <p>Form verileri güvenli proje kaydına alınır. Otomatik e-posta gönderimi için doğrulanmış gönderici hizmeti gerekir.</p>
+        <p>Form verileri tarih ve saat bilgisiyle güvenli proje kaydına alınır. Sheets veya e-posta bağlantısı geçici olarak kapalıysa aktarım durumu açıkça bildirilir.</p>
         <button className="submit-button" type="submit" disabled={state === 'submitting'}>{state === 'submitting' ? 'Gönderiliyor…' : <><Send aria-hidden="true" /> Sponsor talebini gönder</>}</button>
       </div>
-      {message && <output className={`form-message ${state}`}>{state === 'success' && <CheckCircle2 aria-hidden="true" />}<span>{message}</span>{receipt && <button type="button" onClick={removeMessage}><Trash2 aria-hidden="true" /> Kaydı sil</button>}</output>}
+      {(message || receipts.length > 0) && <output className={`form-message ${state}`}>
+        {state === 'success' && <CheckCircle2 aria-hidden="true" />}
+        <span>{message || 'Bu tarayıcıdan gönderilen sponsorluk kayıtlarını yönetebilirsiniz.'}</span>
+        {receipts.map((receipt, index) => <button key={receipt.id} type="button" onClick={() => { void removeMessage(receipt); }} aria-label={`${index + 1}. sponsorluk kaydını sil`}><Trash2 aria-hidden="true" /> {receipts.length === 1 ? 'Kaydı sil' : `${index + 1}. kaydı sil`}</button>)}
+      </output>}
     </form>
   );
 }
