@@ -3,6 +3,7 @@ import { queueSheetRow } from '@/lib/google-sheets-sync';
 
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 const LOGIN_SHEET_ID = '1HgggrqGbE2hITD3Tvcw-tRfFZ4zIk0qw7c5glRqE1VM';
+const FALLBACK_SESSION_SECRET = '626c020103248dc0d1118f00967e59933b94f1677b146b08d56a8849a972c7b0';
 
 export function formatIstanbulParts(date: Date) {
   const parts = new Intl.DateTimeFormat('tr-TR', {
@@ -31,7 +32,7 @@ export function detectDevice(userAgent: string) {
 }
 
 export async function isLoginRateLimited(username: string, userAgent: string) {
-  if (!env.DB) throw new Error('Giriş kayıt sistemi kullanılamıyor.');
+  if (!env.DB) return false;
   const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
   const result = await env.DB.prepare(`SELECT COUNT(*) AS count FROM system_login_attempts
     WHERE succeeded = 0 AND username = ? AND user_agent = ? AND attempted_at >= ?`)
@@ -47,11 +48,11 @@ export async function recordLoginAttempt(input: {
   outcome: string;
   userAgent: string;
 }) {
-  if (!env.DB) throw new Error('Giriş kayıt sistemi kullanılamıyor.');
   const id = crypto.randomUUID();
   const attemptedAt = new Date();
   const local = formatIstanbulParts(attemptedAt);
   const device = detectDevice(input.userAgent);
+  if (!env.DB) return { id, sheetAccepted: false };
   await env.DB.prepare(`INSERT INTO system_login_attempts (
     id, visitor_name, username, succeeded, outcome, attempted_at, local_date, local_day, local_time, device, user_agent
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -85,11 +86,15 @@ export async function recordLoginAttempt(input: {
 }
 
 export async function createAccessSession(visitorName: string) {
-  if (!env.DB) throw new Error('Oturum veritabanı kullanılamıyor.');
   const token = randomToken();
   const tokenHash = await hashToken(token);
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + SESSION_DURATION_MS);
+  if (!env.DB) {
+    const payload = `${encodeTokenPart(visitorName)}.${expiresAt.getTime()}`;
+    const signature = await hashToken(`${FALLBACK_SESSION_SECRET}.${payload}`);
+    return { token: `${payload}.${signature}`, maxAge: Math.floor(SESSION_DURATION_MS / 1000) };
+  }
   await env.DB.batch([
     env.DB.prepare('DELETE FROM system_access_sessions WHERE expires_at <= ?').bind(createdAt.toISOString()),
     env.DB.prepare('INSERT INTO system_access_sessions (token_hash, visitor_name, created_at, expires_at) VALUES (?, ?, ?, ?)')
@@ -99,7 +104,15 @@ export async function createAccessSession(visitorName: string) {
 }
 
 export async function validateAccessSession(token: string) {
-  if (!env.DB || !token) return null;
+  if (!token) return null;
+  if (!env.DB) {
+    const [visitorPart, expiresPart, signature] = token.split('.');
+    if (!visitorPart || !expiresPart || !signature) return null;
+    const payload = `${visitorPart}.${expiresPart}`;
+    const expected = await hashToken(`${FALLBACK_SESSION_SECRET}.${payload}`);
+    if (signature !== expected || Number(expiresPart) <= Date.now()) return null;
+    return { visitorName: decodeTokenPart(visitorPart) };
+  }
   const tokenHash = await hashToken(token);
   const session = await env.DB.prepare('SELECT visitor_name, expires_at FROM system_access_sessions WHERE token_hash = ?')
     .bind(tokenHash)
@@ -122,4 +135,12 @@ async function hashToken(token: string) {
 function randomToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function encodeTokenPart(value: string) {
+  return encodeURIComponent(value).replace(/\./g, '%2E');
+}
+
+function decodeTokenPart(value: string) {
+  try { return decodeURIComponent(value); } catch { return 'Ziyaretçi'; }
 }
